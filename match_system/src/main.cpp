@@ -8,6 +8,10 @@
 #include <thrift/transport/TBufferTransports.h>
 
 #include <iostream>
+#include <thread>
+#include <mutex> //多线程———锁
+#include <condition_variable> //条件变量对锁进行了封装
+#include <queue>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -16,6 +20,20 @@ using namespace ::apache::thrift::server;
 
 using namespace  ::match_service;
 using namespace std;
+
+struct Task
+{
+    User user;
+    string type;
+};
+
+struct MessageQueue
+{
+    queue<Tast>q;
+    mutex m;
+    condition_variable cv;
+}message_queue;
+
 class MathchHandler : virtual public MathchIf {
     public:
         MathchHandler() {
@@ -25,6 +43,9 @@ class MathchHandler : virtual public MathchIf {
         int32_t add_user(const User& user, const std::string& info) {
             // Your implementation goes here
             printf("add_user\n");
+            unique_lock<mutex> lck(message_queue.m);
+            message_queue.q.push({user ,"add"});
+            message_queue.cv.notify_all();
 
             return 0;
         }
@@ -32,11 +53,33 @@ class MathchHandler : virtual public MathchIf {
         int32_t remove_user(const User& user, const std::string& info) {
             // Your implementation goes here
             printf("remove_user\n");
+            unique_lock<mutex> lck(message_queue.m);
+            message_queue.q.push({user,"remove"});
+            message_queue.cv.notify_all();
 
             return 0;
         }
 
 };
+
+void comsume_task()
+{
+    while(true)
+    {
+        unique_lock<mutex> lck(message_queue);
+        if(message_queue.q.empty())
+        {
+            message_queue.cv.wait(lck);
+        }
+        else
+        {
+            auto task=message_queue.q.front();
+            message_queue.q.pop();
+            lck.unlock();
+            //do task
+        }
+    }
+}
 
 int main(int argc, char **argv) {
     int port = 9090;
@@ -51,6 +94,8 @@ int main(int argc, char **argv) {
 
     cout << "Start Match Server" <<endl;
 
+
+    thread matching_thread(consume_task);
     server.serve();
 
 
