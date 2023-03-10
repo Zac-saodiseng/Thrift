@@ -16,6 +16,7 @@
 #include <condition_variable> //条件变量对锁进行了封装
 #include <queue>
 #include <vector>
+#include <unistd.h>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -52,7 +53,9 @@ class Pool{
 			try {
 				transport->open();
 
-                client.save_data("acs_10155","dfa6b3ea",a , b );
+                int res=client.save_data("acs_10155","dfa6b3ea",a , b );
+                if(!res) puts("success");
+                else puts("failed");
 
 				transport->close();
 			} catch (TException& tx) {
@@ -64,11 +67,23 @@ class Pool{
 		{
 			while(users.size()>1)
 			{
-				auto a=users[0],b=users[1];
-				users.erase(users.begin());
-				users.erase(users.begin());
+                sort(users.begin(),users.end(), [&](User &a,User b){
+                    return a.score<b.score;
+                        });
 
-				save_result(a.id ,b.id);
+                bool flag=true;
+                for(uint32_t i=1;i<users.size();i++)
+                {
+                    auto a = users[ i-1 ] , b = users[ i ];
+                    if( b.score-a.score <=50 )
+                    {
+                        users.erase(users.begin()+i-1,users.begin()+i+1);
+                        save_result(a.id,b.id);
+                        flag =false;
+                        break;
+                    }
+                }
+                if(flag) break;
 			}
 		}
 
@@ -124,7 +139,10 @@ void consume_task()
 		unique_lock<mutex> lck(message_queue.m);
 		if(message_queue.q.empty())
 		{
-			message_queue.cv.wait(lck);
+			//message_queue.cv.wait(lck);
+            lck.unlock();
+            pool.match();
+            sleep(1);
 		}
 		else
 		{
