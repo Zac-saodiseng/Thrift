@@ -1,3 +1,26 @@
-#### Linux基础课
+# Thrift
+Thrift是一个跨语言的服务部署框架，最初由Facebook于2007年开发，2008年进入Apache开源项目。Thrift通过一个中间语言(IDL, 接口定义语言)来定义RPC的接口和数据类型，然后通过一个编译器生成不同语言的代码（目前支持C++,Java, Python, PHP, Ruby, Erlang, Perl, Haskell, C#, Cocoa, Smalltalk和OCaml）,并由生成的代码负责RPC协议层和传输层的实现。
 
-#### 6.thrift教程
+Thrift实际上是实现了C/S模式，通过代码生成工具将接口定义文件生成服务器端和客户端代码（可以为不同语言），从而实现服务端和客户端跨语言的支持。用户在Thirft描述文件中声明自己的服务，这些服务经过编译后会生成相应语言的代码文件，然后用户实现服务（客户端调用服务，服务器端提服务）便可以了。其中protocol（协议层, 定义数据传输格式，可以为二进制或者XML等）和transport（传输层，定义数据传输方式，可以为TCP/IP传输，内存共享或者文件共享等）被用作运行时库。
+在Client和Server的最顶层都是用户自定义的处理逻辑，也就是说用户只需要编写用户逻辑，就可以完成整套的RPC调用流程。用户逻辑的下一层是Thrift自动生成的代码，这些代码主要用于结构化数据的解析,发送和接收，同时服务器端的自动生成代码中还包含了RPC请求的转发（Client的A调用转发到Server A函数进行处理）。
+
+协议栈的其他模块都是Thrift的运行时模块：
+
+底层IO模块，负责实际的数据传输，包括Socket，文件，或者压缩数据流等。
+
+TTransport负责以字节流方式发送和接收Message，是底层IO模块在Thrift框架中的实现，每一个底层IO模块都会有一个对应TTransport来负责Thrift的字节流(Byte Stream)数据在该IO模块上的传输。例如TSocket对应Socket传输，TFileTransport对应文件传输。
+
+TProtocol主要负责结构化数据组装成Message，或者从Message结构中读出结构化数据。TProtocol将一个有类型的数据转化为字节流以交给TTransport进行传输，或者从TTransport中读取一定长度的字节数据转化为特定类型的数据。如int32会被TBinaryProtocol Encode为一个四字节的字节数据，或者TBinaryProtocol从TTransport中取出四个字节的数据Decode为int32。
+
+TServer负责接收Client的请求，并将请求转发到Processor进行处理。TServer主要任务就是高效的接受Client的请求，特别是在高并发请求的情况下快速完成请求。
+
+Processor(或者TProcessor)负责对Client的请求做出相应，包括RPC请求转发，调用参数解析和用户逻辑调用，返回值写回等处理步骤。Processor是服务器端从Thrift框架转入用户逻辑的关键流程。Processor同时也负责向Message结构中写入数据或者读出数据。
+
+Thrift的模块设计非常好，在每一个层次都可以根据自己的需要选择合适的实现方式。同时也应该注意到Thrift目前的特性并不是在所有的程序语言中都支持。例如C++实现中有TDenseProtocol没有TTupleProtocol，而Java实现中有TTupleProtocol没有TDenseProtocol。
+
+利用Thrift用户只需要做三件事：
+
+(1). 利用IDL定义数据结构及服务
+(2). 利用代码生成工具将(1)中的IDL编译成对应语言（如C++、JAVA），编译后得到基本的框架代码
+(3). 在(2)中框架代码基础上完成完整代码（纯C++代码、JAVA代码等）
+为了实现上述RPC协议栈，Thrift定义了一套IDL，封装了server相关类, processor相关类,transport相关类,protocol相关类以及并发和时钟管理方面的库。
