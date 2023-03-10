@@ -12,6 +12,7 @@
 #include <mutex> //多线程———锁
 #include <condition_variable> //条件变量对锁进行了封装
 #include <queue>
+#include <vector>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -29,10 +30,45 @@ struct Task
 
 struct MessageQueue
 {
-    queue<Tast>q;
+    queue<Task> q;
     mutex m;
     condition_variable cv;
 }message_queue;
+
+class Pool{
+    public:
+        void save_result(int a,int b){
+            printf("Match Result: %d %d\n",a,b);
+        }
+
+        void match()
+        {
+            while(users.size()>1)
+            {
+                auto a=users[0],b=users[1];
+                users.erase(users.begin());
+                users.erase(users.begin());
+
+                save_result(a.id ,b.id);
+            }
+        }
+
+        void add(User user)
+        {
+            users.push_back(user);
+        }
+        void remove(User user)
+        {
+            for(uint32_t i=0;i<users.size();i++)
+                if(users[i].id==user.id)
+                {
+                    users.erase(users.begin()+ i );
+                    break;
+                }
+        }
+      private:
+        vector<User> users;
+}pool;
 
 class MathchHandler : virtual public MathchIf {
     public:
@@ -62,11 +98,11 @@ class MathchHandler : virtual public MathchIf {
 
 };
 
-void comsume_task()
+void consume_task()
 {
     while(true)
     {
-        unique_lock<mutex> lck(message_queue);
+        unique_lock<mutex> lck(message_queue.m);
         if(message_queue.q.empty())
         {
             message_queue.cv.wait(lck);
@@ -76,7 +112,11 @@ void comsume_task()
             auto task=message_queue.q.front();
             message_queue.q.pop();
             lck.unlock();
-            //do task
+
+            if(task.type=="add") pool.add(task.user);
+            else if(task.type=="remove") pool.remove(task.user);
+
+            pool.match();
         }
     }
 }
